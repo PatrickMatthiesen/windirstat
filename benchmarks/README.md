@@ -3,6 +3,9 @@
 Phase 0 adds an opt-in, quiet performance report and a repeatable local runner.
 Normal interactive scans do not collect telemetry.
 
+The primary optimization measurement is WinDirStat baseline versus WinDirStat
+candidate. External tools are intentionally not used as a pass/fail target.
+
 Build an x64 Release executable, then run:
 
 ```powershell
@@ -19,6 +22,40 @@ measured runs, and writes each raw report plus `summary.json` and
 `measurements.csv`. The summary reports median, minimum, maximum, and median
 absolute deviation. Runs are currently labelled `warm-or-uncontrolled`; cold-cache
 testing requires an explicitly controlled environment.
+
+Compare two telemetry-enabled builds with interleaved execution:
+
+```powershell
+pwsh ./benchmarks/Compare-ScanBenchmarks.ps1 `
+    -BaselineExePath D:\benchmarks\baseline\WinDirStat.exe `
+    -CandidateExePath ./build/WinDirStat_x64.exe `
+    -ScanRoot Z:\ `
+    -Warmups 1 `
+    -Iterations 5 `
+    -Threads 4
+```
+
+The comparison alternates baseline-first and candidate-first pairs. It refuses to
+report a speedup unless file counts, folder counts, logical bytes, physical bytes,
+and actual scan engine agree for every run. It records executable SHA-256 hashes,
+embedded build commits, raw reports, paired measurements, and relative median
+deltas.
+
+Before the first optimization, build the clean telemetry-enabled Phase 0 commit
+and archive that executable outside `build/`, which is replaced by later builds:
+
+```powershell
+$baselineCommit = git rev-parse --short HEAD
+$baselineDirectory = Join-Path ./benchmarks/artifacts "baselines/$baselineCommit"
+New-Item -ItemType Directory -Force -Path $baselineDirectory | Out-Null
+Copy-Item ./build/WinDirStat_x64.exe (Join-Path $baselineDirectory WinDirStat.exe)
+Get-FileHash (Join-Path $baselineDirectory WinDirStat.exe) -Algorithm SHA256
+```
+
+The comparison output records that hash again. If baseline and candidate hashes
+are identical, the run is a harness/noise check rather than evidence of an
+optimization. Five iterations is the minimum normal comparison; increase the
+count when the median absolute deviation is large relative to the measured delta.
 
 The executable contract is:
 

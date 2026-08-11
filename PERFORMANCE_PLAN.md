@@ -17,8 +17,6 @@ Phase 0 will establish reproducible baselines and may refine these targets.
 
 - Reduce median end-to-end fast-scan time by at least 3x on the one-million-entry
   NTFS fixture.
-- Bring whole-volume fast-scan time to within 2x of WizTree on the same machine and
-  volume, with equivalent options, as an informational external comparison.
 - Reduce peak working set during the fast scan by at least 40%.
 - Avoid regressions greater than 5% in basic folder, network, and non-NTFS scans.
 - Preserve logical and physical sizes, timestamps, attributes, hardlink behavior,
@@ -29,6 +27,8 @@ Phase 0 will establish reproducible baselines and may refine these targets.
 ## Guardrails
 
 - Optimize from measurements rather than elapsed-time anecdotes.
+- Judge each optimization against a pinned telemetry-enabled WinDirStat baseline
+  on the same fixture and host. External tools are not an optimization gate.
 - Land independent changes in small, benchmarked commits.
 - Keep the existing C++/Win32 application; a language rewrite is not part of this
   effort.
@@ -78,6 +78,8 @@ generated disk images should not be committed.
 
 - Build x64 Release with the same compiler and linker settings used for releases.
 - Run at least one warmup and five measured iterations.
+- Interleave baseline and candidate runs, alternating which build runs first, to
+  reduce temperature, cache, and background-load ordering bias.
 - Report median, minimum, maximum, and median absolute deviation.
 - Record CPU model, storage type, Windows build, Defender state, elevation state,
   working set, allocation count, CPU time, and bytes read.
@@ -85,6 +87,8 @@ generated disk images should not be committed.
 - Run thread-count variants at 1, 4, and 16 workers.
 - Store results as build artifacts; start with reporting-only CI rather than flaky
   pass/fail timing gates.
+- Require baseline and candidate inventories to match before reporting a speedup.
+- Record both executable hashes and embedded build commits in every comparison.
 - Continue running the existing correctness suite and compare exported inventories
   between the fast and basic engines.
 
