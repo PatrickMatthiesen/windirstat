@@ -13290,6 +13290,38 @@ function Invoke-CliSuite {
             Assert-Fail $g 'Target-before-flag mixed-case dash form executes' $_.Exception.Message
         }
 
+        Write-GroupHeader 'CLI performance report'
+        $g = 'Cli/PerformanceReport'
+        $performanceOut = Join-Path $workRoot 'scan-performance.json'
+        try {
+            $probe = Invoke-CliProbe -Arguments @('/perfreport', $performanceOut, $rootOne)
+            if ($probe.TimedOut) {
+                Assert-Fail $g 'Performance report terminates' "Timed out after $($probe.ElapsedSeconds)s"
+            }
+            elseif ($probe.ExitCode -ne 0) {
+                Assert-Fail $g 'Performance report succeeds' "Exit $($probe.ExitCode). StdErr: $($probe.StdErr)"
+            }
+            elseif (-not (Test-Path -LiteralPath $performanceOut)) {
+                Assert-Fail $g 'Performance report creates JSON' 'Process exited 0 without creating the report'
+            }
+            else {
+                $performance = Get-Content -Raw -LiteralPath $performanceOut | ConvertFrom-Json
+                Assert-That $g 'Performance report uses schema version 1' ($performance.schema_version -eq 1) "schema: $($performance.schema_version)"
+                Assert-That $g 'Performance report contains the expected file count' ($performance.result.files -eq 1) "files: $($performance.result.files)"
+                Assert-That $g 'Performance report contains nonnegative phase timings' `
+                    (($performance.wall_ms.setup -ge 0) -and
+                     ($performance.wall_ms.enumeration_and_materialization -ge 0) -and
+                     ($performance.wall_ms.total_settled -ge 0)) 'negative or missing duration'
+                Assert-That $g 'Performance report identifies the basic engine' `
+                    (-not $performance.engine.fast_scan_used) 'fast_scan_used was true with UseFastScanEngine=0'
+                Assert-That $g 'Performance report omits the scanned path' `
+                    ('scan_root' -notin $performance.PSObject.Properties.Name) 'scan_root leaked into report'
+            }
+        }
+        catch {
+            Assert-Fail $g 'Performance report is valid JSON' $_.Exception.Message
+        }
+
         # A valid target with an output path whose parent does not exist reaches
         # SaveResults and must propagate its failure as exit code 1.
         Write-GroupHeader 'CLI output failure'
@@ -13347,6 +13379,7 @@ function Invoke-CliSuite {
         $noRootOut = Join-Path $workRoot 'no-root.csv'
         $noRootDupesOut = Join-Path $workRoot 'no-root-dupes.csv'
         $noRootPermsOut = Join-Path $workRoot 'no-root-perms.csv'
+        $noRootPerformanceOut = Join-Path $workRoot 'no-root-performance.json'
         $mixedOut = Join-Path $workRoot 'mixed-valid-invalid.csv'
         $mixedReverseOut = Join-Path $workRoot 'mixed-invalid-valid.csv'
         $mixedModeOut = Join-Path $workRoot 'mixed-load-export.csv'
@@ -13373,6 +13406,11 @@ function Invoke-CliSuite {
                 Outputs = @($noRootPermsOut)
             },
             [pscustomobject] @{
+                Label = 'Performance report without a scan root'
+                Arguments = @('/perfreport', $noRootPerformanceOut)
+                Outputs = @($noRootPerformanceOut)
+            },
+            [pscustomobject] @{
                 Label = 'Quiet export flag without an output value'
                 Arguments = @($rootOne, '/saveto')
                 Outputs = @()
@@ -13396,6 +13434,11 @@ function Invoke-CliSuite {
                 Label = 'Multiple quiet export modes'
                 Arguments = @('/saveto', $multipleModeOut, '/savedupesto', $multipleModeDupesOut, $rootOne)
                 Outputs = @($multipleModeOut, $multipleModeDupesOut)
+            },
+            [pscustomobject] @{
+                Label = 'Performance report combined with export'
+                Arguments = @('/perfreport', $noRootPerformanceOut, '/saveto', $multipleModeOut, $rootOne)
+                Outputs = @($noRootPerformanceOut, $multipleModeOut)
             },
             [pscustomobject] @{
                 Label = 'Quiet export flag interrupted before its value'

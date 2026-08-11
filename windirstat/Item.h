@@ -23,6 +23,7 @@
 
 class Finder;
 class FinderNtfsContext;
+class ScanPerformance;
 class FinderBasicContext;
 
 // Columns
@@ -216,7 +217,8 @@ public:
     void SortItemsBySizePhysical() const;
     void SortItemsBySizeLogical() const;
     void UpdateStatsFromDisk();
-    static void ScanItems(BlockingQueue<CItem*>*, FinderNtfsContext& contextNtfs, FinderBasicContext& contextBasic);
+    static void ScanItems(BlockingQueue<CItem*>*, FinderNtfsContext& contextNtfs, FinderBasicContext& contextBasic,
+        ScanPerformance* performance = nullptr);
     static void ScanItemsFinalize(CItem* item);
 
     // CTreeMap Interface

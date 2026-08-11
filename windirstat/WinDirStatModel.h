@@ -19,6 +19,7 @@
 
 #include "pch.h"
 #include "TreeListControl.h"
+#include "ScanPerformance.h"
 
 class CItem;
 class CItemDupe;
@@ -186,6 +187,7 @@ private:
 
     std::unordered_map<std::wstring, BlockingQueue<CItem*>> m_queues; // The scanning and thread queue
     std::jthread m_thread; // Wrapper thread so we do not occupy the UI thread
+    ScanPerformance m_scanPerformance; // Opt-in Phase 0 benchmark telemetry
 
     // Cache selected items so command-update handlers can use a non-owning view
     // without repeated queries or copies

@@ -526,6 +526,7 @@ POWERSHELL.EXE -NoLogo -ExecutionPolicy Unrestricted -NoProfile -File "$(Project
     <ClInclude Include="BlockingQueue.h" />
     <ClInclude Include="CsvLoader.h" />
     <ClInclude Include="WinDirStatModel.h" />
+    <ClInclude Include="ScanPerformance.h" />
     <ClInclude Include="FinderBasic.h" />
     <ClInclude Include="Item.h" />
     <ClInclude Include="ItemDupe.h" />
@@ -584,6 +585,7 @@ POWERSHELL.EXE -NoLogo -ExecutionPolicy Unrestricted -NoProfile -File "$(Project
     <ClCompile Include="WinDirStatModel.cpp">
     </ClCompile>
     <ClCompile Include="WinDirStatModel.Actions.cpp" />
+    <ClCompile Include="ScanPerformance.cpp" />
     <ClCompile Include="Filtering.cpp" />
     <ClCompile Include="Item.Extended.cpp" />
     <ClCompile Include="Pages\PagePrompts.cpp" />

@@ -20,6 +20,8 @@
 #include "pch.h"
 #include "Finder.h"
 
+class ScanPerformance;
+
 class FinderNtfsContext final
 {
     friend class FinderNtfs;
@@ -49,10 +51,11 @@ class FinderNtfsContext final
     mutable std::shared_mutex m_parentToChildMutex;
 
     bool m_isLoaded = false;
+    ScanPerformance* m_performance = nullptr;
 
 public:
 
-    FinderNtfsContext() = default;
+    explicit FinderNtfsContext(ScanPerformance* performance = nullptr) : m_performance(performance) {}
     bool LoadRoot(CItem* driveitem);
     bool IsLoaded() const { return m_isLoaded; }
 

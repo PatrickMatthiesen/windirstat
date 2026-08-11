@@ -20,6 +20,7 @@
 #include "Filtering.h"
 #include "FinderBasic.h"
 #include "FinderNtfs.h"
+#include "ScanPerformance.h"
 
 // --- Construction / Destruction ---
 
@@ -1011,7 +1012,8 @@ void CItem::UpdateStatsFromDisk()
     }
 }
 
-void CItem::ScanItems(BlockingQueue<CItem*> * queue, FinderNtfsContext& contextNtfs, FinderBasicContext& contextBasic)
+void CItem::ScanItems(BlockingQueue<CItem*> * queue, FinderNtfsContext& contextNtfs, FinderBasicContext& contextBasic,
+    ScanPerformance* performance)
 {
     FinderNtfs finderNtfs(&contextNtfs);
     FinderBasic finderBasic(&contextBasic);
@@ -1036,6 +1038,9 @@ void CItem::ScanItems(BlockingQueue<CItem*> * queue, FinderNtfsContext& contextN
         {
             contextNtfs.LoadRoot(item);
         }
+
+        auto itemProcessing = performance != nullptr ?
+            performance->Measure(ScanPerformance::Phase::ItemProcessingWork) : ScanPerformance::Scope{};
 
         if (item->IsTypeOrFlag(IT_DRIVE, IT_DIRECTORY))
         {

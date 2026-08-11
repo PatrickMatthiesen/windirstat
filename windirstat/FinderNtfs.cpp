@@ -17,6 +17,7 @@
 
 #include "pch.h"
 #include "FinderNtfs.h"
+#include "ScanPerformance.h"
 
 enum ATTRIBUTE_TYPE_CODE : ULONG
 {
@@ -161,6 +162,11 @@ using STANDARD_INFORMATION = struct STANDARD_INFORMATION
 
 bool FinderNtfsContext::LoadRoot(CItem* driveitem)
 {
+    auto loadWork = m_performance != nullptr ?
+        m_performance->Measure(ScanPerformance::Phase::MftLoadWork) : ScanPerformance::Scope{};
+    auto discoveryWork = m_performance != nullptr ?
+        m_performance->Measure(ScanPerformance::Phase::MftDiscoveryWork) : ScanPerformance::Scope{};
+
     // Trim off excess characters
     std::wstring volumePath = driveitem->GetPathLong();
     while (!volumePath.empty() && volumePath.back() == L'\\') volumePath.pop_back();
@@ -211,6 +217,8 @@ bool FinderNtfsContext::LoadRoot(CItem* driveitem)
         );
         vcnStart = vcnNext;
     }
+    discoveryWork.Stop();
+    if (m_performance != nullptr) m_performance->AddMftExtents(retrievalBuffer->ExtentCount);
 
     // Process MFT records
     std::for_each(std::execution::par, dataRuns.begin(), dataRuns.end(), [&](const auto& dataRun)
@@ -239,6 +247,8 @@ bool FinderNtfsContext::LoadRoot(CItem* driveitem)
             bytesRead = 0;
             const ULONG bytesThisRead = static_cast<ULONG>(std::min<ULONGLONG>(bytesToRead, bufferSize));
             OVERLAPPED overlapped = { .Offset = fileOffset.LowPart, .OffsetHigh = static_cast<DWORD>(fileOffset.HighPart), .hEvent = event };
+            auto readWork = m_performance != nullptr ?
+                m_performance->Measure(ScanPerformance::Phase::MftReadWork) : ScanPerformance::Scope{};
             if (ReadFile(volumeHandle, buffer.get(), bytesThisRead, &bytesRead, &overlapped) == 0)
             {
                 if (GetLastError() != ERROR_IO_PENDING ||
@@ -249,7 +259,11 @@ bool FinderNtfsContext::LoadRoot(CItem* driveitem)
                     break;
                 }
             }
+            readWork.Stop();
 
+            auto parseWork = m_performance != nullptr ?
+                m_performance->Measure(ScanPerformance::Phase::MftParseWork) : ScanPerformance::Scope{};
+            ULONGLONG validRecords = 0;
             for (ULONG offset = 0; offset + volumeInfo.BytesPerFileRecordSegment <= bytesRead; offset += volumeInfo.BytesPerFileRecordSegment)
             {
                 // Process MFT record inline
@@ -278,6 +292,7 @@ bool FinderNtfsContext::LoadRoot(CItem* driveitem)
 
                 // Only process records with valid headers and are in use
                 if (!fileRecord->IsValid() || !fileRecord->IsInUse()) continue;
+                ++validRecords;
                 const auto currentRecord = (mftRunOffset + bytesReadFromRun + offset) / volumeInfo.BytesPerFileRecordSegment;
                 const auto baseRecordIndex = fileRecord->BaseFileRecordNumber > 0 ? fileRecord->BaseFileRecordNumber : currentRecord;
                 FileRecordBase* baseRecordPtr = nullptr;
@@ -365,6 +380,11 @@ bool FinderNtfsContext::LoadRoot(CItem* driveitem)
                     }
                 }
             }
+            parseWork.Stop();
+            if (m_performance != nullptr)
+            {
+                m_performance->AddMftChunk(bytesRead, bytesRead / volumeInfo.BytesPerFileRecordSegment, validRecords);
+            }
         }
     });
 
@@ -376,6 +396,14 @@ bool FinderNtfsContext::LoadRoot(CItem* driveitem)
 
     driveitem->SetIndex(NtfsNodeRoot);
     m_isLoaded = true;
+    if (m_performance != nullptr)
+    {
+        m_performance->AddMftBaseRecords(m_baseFileRecordMap.size());
+        ULONGLONG nameCount = 0;
+        for (const auto& children : m_parentToChildMap | std::views::values) nameCount += children.size();
+        m_performance->AddMftNames(nameCount);
+        m_performance->MarkMftVolumeLoaded();
+    }
     return true;
 }
 

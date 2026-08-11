@@ -248,6 +248,9 @@
     <ClInclude Include="WinDirStatModel.h">
       <Filter>Header Files\Core</Filter>
     </ClInclude>
+    <ClInclude Include="ScanPerformance.h">
+      <Filter>Header Files\Core</Filter>
+    </ClInclude>
     <ClInclude Include="Options.h">
       <Filter>Header Files\Core</Filter>
     </ClInclude>
@@ -482,6 +485,9 @@
       <Filter>Source Files\Core</Filter>
     </ClCompile>
     <ClCompile Include="WinDirStatModel.Actions.cpp">
+      <Filter>Source Files\Core</Filter>
+    </ClCompile>
+    <ClCompile Include="ScanPerformance.cpp">
       <Filter>Source Files\Core</Filter>
     </ClCompile>
     <ClCompile Include="Property.cpp">

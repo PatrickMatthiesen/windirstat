@@ -219,6 +219,7 @@ class CWinDirStatCommandLineInfo final
     static constexpr std::wstring_view saveToFlag = L"saveto";
     static constexpr std::wstring_view saveDupesToFlag = L"savedupesto";
     static constexpr std::wstring_view savePermsToFlag = L"savepermsto";
+    static constexpr std::wstring_view performanceReportFlag = L"perfreport";
     static constexpr std::wstring_view loadFromFlag = L"loadfrom";
     static constexpr std::wstring_view legacyUninstallFlag = L"legacyuninstall";
     std::wstring m_path;
@@ -281,6 +282,11 @@ private:
             {
                 CDirStatApp::Get()->m_savePermsToPath = param;
             }
+            else if (m_pendingFlag == performanceReportFlag)
+            {
+                CDirStatApp::Get()->m_performanceReportPath = param;
+                COptions::ScanForDuplicates = false;
+            }
             else if (m_pendingFlag == loadFromFlag)
             {
                 CDirStatApp::Get()->m_loadFromPath = param;
@@ -330,7 +336,8 @@ private:
             return;
         }
         param = MakeLower(param);
-        if (param == saveToFlag || param == saveDupesToFlag || param == savePermsToFlag || param == loadFromFlag)
+        if (param == saveToFlag || param == saveDupesToFlag || param == savePermsToFlag ||
+            param == performanceReportFlag || param == loadFromFlag)
         {
             if (!m_operationFlag.empty()) m_malformedFlag = true;
             else m_operationFlag = param;
@@ -399,7 +406,8 @@ bool CDirStatApp::InitInstance()
     }
 
     // Check if we should hide the app window
-    const bool hideApp = !m_saveToPath.empty() || !m_saveDupesToPath.empty() || !m_savePermsToPath.empty();
+    const bool hideApp = !m_saveToPath.empty() || !m_saveDupesToPath.empty() || !m_savePermsToPath.empty() ||
+        !m_performanceReportPath.empty();
     if (hideApp && (cmdInfo.GetPath().empty() || cmdInfo.HasInvalidPath())) ExitProcess(1);
     if (hideApp) m_nCmdShow = SW_HIDE;
 

@@ -969,6 +969,12 @@ void CWinDirStatModel::StartScanningEngine(std::vector<CItem*> items)
     CWaitCursor wc;
     StopScanningEngine();
 
+    const bool performanceEnabled = !CDirStatApp::Get()->GetPerformanceReportPath().empty();
+    m_scanPerformance.Reset(performanceEnabled, COptions::UseFastScanEngine,
+        static_cast<unsigned int>(COptions::ScanningThreads.Obj()), COptions::ProcessHardlinks,
+        COptions::ScanForDuplicates, false, static_cast<unsigned int>(items.size()));
+    auto setupWall = m_scanPerformance.Measure(ScanPerformance::Phase::SetupWall);
+
     // Address conflicts with currently zoomed/selected items
     const auto zoomItem = GetZoomItem();
     for (const auto item : items)
@@ -1071,11 +1077,15 @@ void CWinDirStatModel::StartScanningEngine(std::vector<CItem*> items)
     // Refresh filter cutoffs immediately before scanning in case settings
     // were compiled long ago (e.g. dialog left open before clicking scan).
     CFiltering::CompileFilters();
+    m_scanPerformance.SetFilteringActive(CFiltering::IsFilterActive());
+    setupWall.Stop();
 
     // Start a thread so we do not hang the message loop during inserts.
     // Lambda captures assume the model exists for the duration of the scan.
     m_thread = std::jthread([this,items, visualInfo] () mutable
     {
+        auto enumerationWall = m_scanPerformance.Measure(ScanPerformance::Phase::EnumerationWall);
+
         // Add items to processing queue
         for (const auto & item : items)
         {
@@ -1103,15 +1113,15 @@ void CWinDirStatModel::StartScanningEngine(std::vector<CItem*> items)
         std::unordered_map<std::wstring, FinderBasicContext> queueContextBasic;
         for (auto& queue : m_queues)
         {
-            queueContextNtfs.try_emplace(queue.first);
+            queueContextNtfs.try_emplace(queue.first, &m_scanPerformance);
             queueContextBasic.try_emplace(queue.first);
 
             auto* queuePtr = &queue.second;
             auto* ntfsCtx = &queueContextNtfs[queue.first];
             auto* basicCtx = &queueContextBasic[queue.first];
-            queue.second.StartThreads(COptions::ScanningThreads, [queuePtr, ntfsCtx, basicCtx]
+            queue.second.StartThreads(COptions::ScanningThreads, [this, queuePtr, ntfsCtx, basicCtx]
             {
-                CItem::ScanItems(queuePtr, *ntfsCtx, *basicCtx);
+                CItem::ScanItems(queuePtr, *ntfsCtx, *basicCtx, &m_scanPerformance);
             });
         }
 
@@ -1126,6 +1136,7 @@ void CWinDirStatModel::StartScanningEngine(std::vector<CItem*> items)
         StopReason stopReason = Default;
         for (auto& queue : m_queues | std::views::values)
             stopReason = static_cast<StopReason>(queue.WaitForCompletion());
+        enumerationWall.Stop();
 
         // If new scan or closing, complete scan UI cleanup before the old
         // tree is torn down.
@@ -1157,25 +1168,28 @@ void CWinDirStatModel::StartScanningEngine(std::vector<CItem*> items)
         }
 
         // Handle hardlink counting for the drive
-        auto drives = GetRootItem()->GetDriveItems();
-        if (COptions::ProcessHardlinks) std::for_each(std::execution::par, drives.begin(), drives.end(), [](auto* drive)
         {
-            // Create hardlink item if it doesn't exist
-            if (drive->FindHardlinksItem() == nullptr)
+            auto hardlinkWall = m_scanPerformance.Measure(ScanPerformance::Phase::HardlinkWall);
+            auto drives = GetRootItem()->GetDriveItems();
+            if (COptions::ProcessHardlinks) std::for_each(std::execution::par, drives.begin(), drives.end(), [](auto* drive)
             {
-                drive->CreateHardlinksItem();
-            }
+                // Create hardlink item if it doesn't exist
+                if (drive->FindHardlinksItem() == nullptr)
+                {
+                    drive->CreateHardlinksItem();
+                }
 
-            drive->DoHardlinkAdjustment();
-        });
-        else std::for_each(std::execution::par, drives.begin(), drives.end(), [](auto* drive)
-        {
-            // Remove hardlink item if processing is disabled
-            if (drive->FindHardlinksItem() != nullptr)
+                drive->DoHardlinkAdjustment();
+            });
+            else std::for_each(std::execution::par, drives.begin(), drives.end(), [](auto* drive)
             {
-                drive->RemoveHardlinksItem();
-            }
-        });
+                // Remove hardlink item if processing is disabled
+                if (drive->FindHardlinksItem() != nullptr)
+                {
+                    drive->RemoveHardlinksItem();
+                }
+            });
+        }
         // After hardlink adjustment GetProgressPos() holds the corrected scan-based size.
         // Resync the progress range to this value so position and range share exactly the
         // same calculation basis — they will converge to 100%, not drop to 99%.
@@ -1189,8 +1203,29 @@ void CWinDirStatModel::StartScanningEngine(std::vector<CItem*> items)
         }
 
         // Sorting and other finalization tasks
-        CItem::ScanItemsFinalize(GetRootItem());
-        Get()->RebuildExtensionData();
+        {
+            auto finalizationWall = m_scanPerformance.Measure(ScanPerformance::Phase::FinalizationWall);
+            CItem::ScanItemsFinalize(GetRootItem());
+        }
+        {
+            auto extensionWall = m_scanPerformance.Measure(ScanPerformance::Phase::ExtensionFinalizeWall);
+            Get()->RebuildExtensionData();
+        }
+
+        // Performance reports are a standalone quiet operation so export serialization
+        // does not contaminate scan timings.
+        if (const auto reportPath = CDirStatApp::Get()->GetPerformanceReportPath(); !reportPath.empty())
+        {
+            if (!HasRootItem()) ExitProcess(1);
+            {
+                auto heapMinWall = m_scanPerformance.Measure(ScanPerformance::Phase::HeapMinWall);
+                (void) _heapmin();
+            }
+            const auto* root = GetRootItem();
+            m_scanPerformance.Finish(root->GetFilesCount(), root->GetFoldersCount(),
+                root->GetSizeLogical(), root->GetSizePhysical());
+            ExitProcess(m_scanPerformance.WriteJson(reportPath) ? 0 : 1);
+        }
 
         // Handle quiet save mode if path is set
         if (const auto savePath = CDirStatApp::Get()->GetSaveToPath(); !savePath.empty())
@@ -1229,27 +1264,33 @@ void CWinDirStatModel::StartScanningEngine(std::vector<CItem*> items)
         }
 
         // Invoke a UI thread to do updates
-        CMainFrame::Get()->InvokeInMessageThread([&]
         {
-            CMainFrame::Get()->LockWindowUpdate();
-            Get()->NotifyPanes();
-            CMainFrame::Get()->SetProgressComplete();
-            CMainFrame::Get()->ApplyPaneVisibility(true);
-            CMainFrame::Get()->GetVisualizationPane()->SuspendRecalculationDrawing(false);
-            CMainFrame::Get()->UnlockWindowUpdate();
-
-            // Restore pre-scan visual orientation
-            for (const auto& item : visualInfo | std::views::keys)
+            auto uiPublicationWall = m_scanPerformance.Measure(ScanPerformance::Phase::UiPublicationWall);
+            CMainFrame::Get()->InvokeInMessageThread([&]
             {
-                if (GetFocusControl()->FindTreeItem(item) == -1 || !item->IsVisible()) continue;
+                CMainFrame::Get()->LockWindowUpdate();
+                Get()->NotifyPanes();
+                CMainFrame::Get()->SetProgressComplete();
+                CMainFrame::Get()->ApplyPaneVisibility(true);
+                CMainFrame::Get()->GetVisualizationPane()->SuspendRecalculationDrawing(false);
+                CMainFrame::Get()->UnlockWindowUpdate();
 
-                // Restore selection if previously set
-                if (visualInfo[item].isSelected) GetFocusControl()->SelectItem(item, false, true);
-            }
-        });
+                // Restore pre-scan visual orientation
+                for (const auto& item : visualInfo | std::views::keys)
+                {
+                    if (GetFocusControl()->FindTreeItem(item) == -1 || !item->IsVisible()) continue;
+
+                    // Restore selection if previously set
+                    if (visualInfo[item].isSelected) GetFocusControl()->SelectItem(item, false, true);
+                }
+            });
+        }
 
         // Force heap cleanup after scan
-        (void) _heapmin();
+        {
+            auto heapMinWall = m_scanPerformance.Measure(ScanPerformance::Phase::HeapMinWall);
+            (void) _heapmin();
+        }
     });
 }
 

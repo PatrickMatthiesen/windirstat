@@ -5,6 +5,7 @@
 /publish/
 /contrib/
 /build/
+/benchmarks/results/
 /enc_temp_folder/
 intermediate/
 
