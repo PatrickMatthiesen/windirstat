@@ -6,6 +6,7 @@
 /contrib/
 /build/
 /benchmarks/results/
+/benchmarks/artifacts/
 /enc_temp_folder/
 intermediate/
 

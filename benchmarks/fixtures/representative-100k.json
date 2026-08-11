@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "name": "ntfs-representative-100k",
+  "description": "Representative fixture with more than 100,000 live files and substantial unused MFT records.",
+  "vhdx_maximum_size_mb": 2048,
+  "volume_label": "WDS100K",
+  "allocation_unit_bytes": 4096,
+  "layout": {
+    "mixed": { "file_count": 90000, "directory_count": 900, "minimum_size": 0, "maximum_size": 4096 },
+    "wide": { "file_count": 10000, "file_size": 128 },
+    "deep": { "depth": 128, "file_size": 64 },
+    "hardlinks": { "additional_links": 256, "file_size": 4096 },
+    "resident": { "file_count": 512, "file_size": 64 },
+    "sparse": { "file_count": 8, "logical_size": 67108864 },
+    "compressed": { "file_count": 8, "logical_size": 1048576 },
+    "wof": { "file_count": 4, "logical_size": 1048576 },
+    "reparse": { "junction_count": 8, "symlink_count": 8 },
+    "mft_churn_records": 100000
+  }
+}

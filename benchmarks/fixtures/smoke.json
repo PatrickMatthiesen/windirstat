@@ -1,0 +1,20 @@
+{
+  "schema_version": 1,
+  "name": "ntfs-smoke",
+  "description": "Small fixture for validating generation and inventory logic.",
+  "vhdx_maximum_size_mb": 256,
+  "volume_label": "WDSSMOKE",
+  "allocation_unit_bytes": 4096,
+  "layout": {
+    "mixed": { "file_count": 40, "directory_count": 4, "minimum_size": 0, "maximum_size": 4096 },
+    "wide": { "file_count": 20, "file_size": 128 },
+    "deep": { "depth": 6, "file_size": 64 },
+    "hardlinks": { "additional_links": 5, "file_size": 4096 },
+    "resident": { "file_count": 8, "file_size": 64 },
+    "sparse": { "file_count": 1, "logical_size": 67108864 },
+    "compressed": { "file_count": 1, "logical_size": 1048576 },
+    "wof": { "file_count": 1, "logical_size": 1048576 },
+    "reparse": { "junction_count": 1, "symlink_count": 1 },
+    "mft_churn_records": 20
+  }
+}
