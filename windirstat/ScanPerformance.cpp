@@ -96,6 +96,8 @@ void ScanPerformance::Reset(const bool enabled, const bool fastScanRequested, co
     const unsigned int targetCount)
 {
     m_enabled = enabled;
+    if (!m_enabled) return;
+
     m_fastScanRequested = fastScanRequested;
     m_hardlinksEnabled = hardlinksEnabled;
     m_duplicatesEnabled = duplicatesEnabled;
@@ -128,8 +130,6 @@ void ScanPerformance::Reset(const bool enabled, const bool fastScanRequested, co
     m_peakWorkingSet = 0;
     m_endWorkingSet = 0;
     m_endPrivateBytes = 0;
-
-    if (!m_enabled) return;
 
     FILETIME created{}, exited{}, kernel{}, user{};
     if (GetProcessTimes(GetCurrentProcess(), &created, &exited, &kernel, &user))

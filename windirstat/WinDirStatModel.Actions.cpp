@@ -970,6 +970,7 @@ void CWinDirStatModel::StartScanningEngine(std::vector<CItem*> items)
     StopScanningEngine();
 
     const bool performanceEnabled = !CDirStatApp::Get()->GetPerformanceReportPath().empty();
+    ScanPerformance* const performance = performanceEnabled ? &m_scanPerformance : nullptr;
     m_scanPerformance.Reset(performanceEnabled, COptions::UseFastScanEngine,
         static_cast<unsigned int>(COptions::ScanningThreads.Obj()), COptions::ProcessHardlinks,
         COptions::ScanForDuplicates, false, static_cast<unsigned int>(items.size()));
@@ -1077,12 +1078,12 @@ void CWinDirStatModel::StartScanningEngine(std::vector<CItem*> items)
     // Refresh filter cutoffs immediately before scanning in case settings
     // were compiled long ago (e.g. dialog left open before clicking scan).
     CFiltering::CompileFilters();
-    m_scanPerformance.SetFilteringActive(CFiltering::IsFilterActive());
+    if (performance != nullptr) performance->SetFilteringActive(CFiltering::IsFilterActive());
     setupWall.Stop();
 
     // Start a thread so we do not hang the message loop during inserts.
     // Lambda captures assume the model exists for the duration of the scan.
-    m_thread = std::jthread([this,items, visualInfo] () mutable
+    m_thread = std::jthread([this,items, visualInfo, performance] () mutable
     {
         auto enumerationWall = m_scanPerformance.Measure(ScanPerformance::Phase::EnumerationWall);
 
@@ -1113,15 +1114,15 @@ void CWinDirStatModel::StartScanningEngine(std::vector<CItem*> items)
         std::unordered_map<std::wstring, FinderBasicContext> queueContextBasic;
         for (auto& queue : m_queues)
         {
-            queueContextNtfs.try_emplace(queue.first, &m_scanPerformance);
+            queueContextNtfs.try_emplace(queue.first, performance);
             queueContextBasic.try_emplace(queue.first);
 
             auto* queuePtr = &queue.second;
             auto* ntfsCtx = &queueContextNtfs[queue.first];
             auto* basicCtx = &queueContextBasic[queue.first];
-            queue.second.StartThreads(COptions::ScanningThreads, [this, queuePtr, ntfsCtx, basicCtx]
+            queue.second.StartThreads(COptions::ScanningThreads, [performance, queuePtr, ntfsCtx, basicCtx]
             {
-                CItem::ScanItems(queuePtr, *ntfsCtx, *basicCtx, &m_scanPerformance);
+                CItem::ScanItems(queuePtr, *ntfsCtx, *basicCtx, performance);
             });
         }
 
