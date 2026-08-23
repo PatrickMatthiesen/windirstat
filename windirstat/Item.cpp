@@ -1027,6 +1027,7 @@ void CItem::ScanItems(BlockingQueue<CItem*> * queue, FinderNtfsContext& contextN
     FinderNtfs finderNtfs(&contextNtfs);
     FinderBasic finderBasic(&contextBasic);
     CExtensionDataBatch extensionBatch;
+    const bool filterActive = CFiltering::IsFilterActive();
     const struct ExtensionBatchFlusher
     {
         CExtensionDataBatch& batch;
@@ -1041,7 +1042,8 @@ void CItem::ScanItems(BlockingQueue<CItem*> * queue, FinderNtfsContext& contextN
         // Mark the time we started evaluating this node
         item->ResetScanStartTime();
 
-        if (item->IsTypeOrFlag(IT_DRIVE, IT_DIRECTORY) && CFiltering::IsFilteredOut(item->GetPath()))
+        if (filterActive && item->IsTypeOrFlag(IT_DRIVE, IT_DIRECTORY) &&
+            CFiltering::IsFilteredOut(item->GetPath()))
         {
             item->UpwardSubtractReadJobs(1);
             item->UpwardDrivePacman();
@@ -1068,7 +1070,7 @@ void CItem::ScanItems(BlockingQueue<CItem*> * queue, FinderNtfsContext& contextN
                 {
                     if (COptions::ExcludeHiddenDirectory && finder->IsHidden() ||
                         COptions::ExcludeProtectedDirectory && finder->IsHiddenSystem() ||
-                        CFiltering::IsFilteredOut(finder->GetFilePath()))
+                        filterActive && CFiltering::IsFilteredOut(finder->GetFilePath()))
                     {
                         continue;
                     }
@@ -1084,7 +1086,7 @@ void CItem::ScanItems(BlockingQueue<CItem*> * queue, FinderNtfsContext& contextN
                     if (COptions::ExcludeHiddenFile && finder->IsHidden() ||
                         COptions::ExcludeProtectedFile && finder->IsHiddenSystem() ||
                         COptions::ExcludeSymbolicLinksFile && finder->GetReparseTag() == IO_REPARSE_TAG_SYMLINK ||
-                        CFiltering::IsFilteredOut(finder->GetFileName(), finder->GetFilePath(),
+                        filterActive && CFiltering::IsFilteredOut(finder->GetFileName(), finder->GetFilePath(),
                             finder->GetFileSizeLogical(), finder->GetLastWriteTime()))
                     {
                         continue;
