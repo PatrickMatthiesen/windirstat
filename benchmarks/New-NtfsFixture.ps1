@@ -224,7 +224,7 @@ try {
     $residentRoot = Join-Path $fixtureRoot 'resident'
     New-Item -ItemType Directory -Path $residentRoot | Out-Null
     for ($index = 0; $index -lt [int] $layout.resident.file_count; ++$index) {
-        New-DeterministicFile (Join-Path $residentRoot ('resident-{0:d6}.bin' -f $index)) ([int64] $layout.resident.file_size) ([byte] $index)
+        New-DeterministicFile (Join-Path $residentRoot ('resident-{0:d6}.bin' -f $index)) ([int64] $layout.resident.file_size) ([byte] ($index % 251))
     }
     $generated.resident_files = [int64] $layout.resident.file_count
 
