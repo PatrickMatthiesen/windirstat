@@ -26,6 +26,18 @@ class FinderNtfsContext;
 class ScanPerformance;
 class FinderBasicContext;
 
+class CExtensionDataBatch final
+{
+public:
+    struct Record
+    {
+        ULONGLONG files = 0;
+        ULONGLONG bytes = 0;
+    };
+
+    std::unordered_map<std::wstring, Record> records;
+};
+
 // Columns
 enum ITEMCOLUMNS : std::uint8_t
 {
@@ -171,7 +183,7 @@ public:
     ULONG GetFilesCount() const noexcept;
     ULONG GetFoldersCount() const noexcept;
     ULONGLONG GetItemsCount() const noexcept;
-    void ExtensionDataAdd();
+    void ExtensionDataAdd(CExtensionDataBatch* batch = nullptr);
     void ExtensionDataRemove();
     void ExtensionDataProcessChildren(bool remove = false);
 
@@ -312,7 +324,7 @@ private:
     inline static std::atomic<ULONGLONG> scanClockState = 0;
     static ULONG GetScanTickCount() noexcept;
     CItem* AddDirectory(const Finder& finder);
-    CItem* AddFile(const Finder& finder);
+    CItem* AddFile(const Finder& finder, CExtensionDataBatch* extensionBatch = nullptr);
 
     // Special structure for container items that is separately allocated to
     // reduce memory usage.  This operates under the assumption that most

@@ -279,7 +279,7 @@ CItem* CItem::AddDirectory(const Finder& finder)
     return child;
 }
 
-CItem* CItem::AddFile(const Finder& finder)
+CItem* CItem::AddFile(const Finder& finder, CExtensionDataBatch* extensionBatch)
 {
     auto* const child = new CItem(IT_FILE, finder.GetFileName());
     child->SetIndex(finder.GetIndex());
@@ -289,7 +289,7 @@ CItem* CItem::AddFile(const Finder& finder)
     child->SetAttributes(finder.GetAttributes());
     child->SetReparseTag(finder.GetReparseTag());
     if (finder.IsReserved() || this->IsTypeOrFlag(ITF_RESERVED)) child->SetFlag(ITF_RESERVED);
-    child->ExtensionDataAdd();
+    child->ExtensionDataAdd(extensionBatch);
     AddChild(child);
     child->SetDone();
     return child;
@@ -462,11 +462,20 @@ ULONGLONG CItem::GetItemsCount() const noexcept
     return static_cast<ULONGLONG>(m_folderInfo->m_files) + static_cast<ULONGLONG>(m_folderInfo->m_subdirs);
 }
 
-void CItem::ExtensionDataAdd()
+void CItem::ExtensionDataAdd(CExtensionDataBatch* batch)
 {
     if (!IsTypeOrFlag(IT_FILE) || IsTypeOrFlag(ITF_EXTDATA)) return;
-    const auto record = CWinDirStatModel::Get()->GetExtensionDataRecord(GetExtension());
-    record->AddFile(GetSizeLogical());
+    if (batch != nullptr)
+    {
+        auto& totals = batch->records[GetExtension()];
+        totals.files++;
+        totals.bytes += GetSizeLogical();
+    }
+    else
+    {
+        const auto record = CWinDirStatModel::Get()->GetExtensionDataRecord(GetExtension());
+        record->AddFile(GetSizeLogical());
+    }
     SetFlag(ITF_EXTDATA);
 }
 
@@ -1017,6 +1026,12 @@ void CItem::ScanItems(BlockingQueue<CItem*> * queue, FinderNtfsContext& contextN
 {
     FinderNtfs finderNtfs(&contextNtfs);
     FinderBasic finderBasic(&contextBasic);
+    CExtensionDataBatch extensionBatch;
+    const struct ExtensionBatchFlusher
+    {
+        CExtensionDataBatch& batch;
+        ~ExtensionBatchFlusher() { CWinDirStatModel::Get()->MergeExtensionData(batch); }
+    } extensionBatchFlusher{ extensionBatch };
 
     for (auto itemOpt = queue->Pop(); itemOpt.has_value(); itemOpt = queue->Pop())
     {
@@ -1076,7 +1091,7 @@ void CItem::ScanItems(BlockingQueue<CItem*> * queue, FinderNtfsContext& contextN
                     }
 
                     item->UpwardAddFiles(1);
-                    CItem* newitem = item->AddFile(*finder);
+                    CItem* newitem = item->AddFile(*finder, &extensionBatch);
                     CFileDupeControl::Get()->ProcessDuplicate(newitem, queue);
                     CFileTopControl::Get()->ProcessTop(newitem);
                     queue->WaitIfSuspended();

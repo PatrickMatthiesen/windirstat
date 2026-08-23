@@ -227,6 +227,19 @@ SExtensionRecord* CWinDirStatModel::GetExtensionDataRecord(const std::wstring& e
     return &m_extensionData[ext];
 }
 
+void CWinDirStatModel::MergeExtensionData(const CExtensionDataBatch& batch)
+{
+    if (batch.records.empty()) return;
+
+    std::scoped_lock guard(m_extensionMutex);
+    for (const auto& [extension, totals] : batch.records)
+    {
+        auto& record = m_extensionData[extension];
+        record.files.fetch_add(totals.files, std::memory_order_relaxed);
+        record.bytes.fetch_add(totals.bytes, std::memory_order_relaxed);
+    }
+}
+
 // Snapshots every ".ext" key directly under HKEY_CLASSES_ROOT. Rebuilt with the extension
 // data so registration tests are lock-free set lookups
 void CWinDirStatModel::RebuildRegisteredExtensions()

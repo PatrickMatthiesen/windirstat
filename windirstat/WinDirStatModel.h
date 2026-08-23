@@ -26,6 +26,7 @@ class CItemDupe;
 class CItemTop;
 class CItemSearch;
 class CWinDirStatPane;
+class CExtensionDataBatch;
 enum LOGICAL_FOCUS : uint8_t;
 
 //
@@ -104,6 +105,7 @@ public:
 
     CExtensionData* GetExtensionData();
     SExtensionRecord* GetExtensionDataRecord(const std::wstring& ext);
+    void MergeExtensionData(const CExtensionDataBatch& batch);
     bool IsExtensionRegistered(const std::wstring& ext) const;
     ULONGLONG GetRootSize() const;
 
