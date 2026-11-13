@@ -24,12 +24,15 @@
 class CFileTopControl final : public CTreeListControl
 {
 public:
+    using PendingBatch = std::vector<CItem*>;
+
     CFileTopControl();
     ~CFileTopControl() override { m_singleton = nullptr; }
     bool GetAscendingDefault(int column) override;
     static CFileTopControl* Get() { return m_singleton; }
     CItemTop* GetRootItem() const { return m_rootItem; }
-    void ProcessTop(CItem* item);
+    void ProcessTop(CItem* item, PendingBatch* batch = nullptr);
+    void FlushTopBatch(PendingBatch& batch);
     void ClearPendingItems();
     void RemoveItem(CItem* item);
     void SortItems() override;
@@ -45,7 +48,8 @@ protected:
 
     inline static CFileTopControl* m_singleton = nullptr;
     CItemTop* m_rootItem = nullptr;
-    SingleConsumerQueue<CItem*> m_queuedSet;
+    static constexpr size_t PendingBatchSize = 256;
+    SingleConsumerQueue<PendingBatch> m_queuedSet;
     std::vector<CItem*> m_sizeMap;
     ULONGLONG m_topNMinSize = 0;
     bool m_needsResort = true;

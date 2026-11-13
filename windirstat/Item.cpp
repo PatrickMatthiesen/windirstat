@@ -1027,12 +1027,19 @@ void CItem::ScanItems(BlockingQueue<CItem*> * queue, FinderNtfsContext& contextN
     FinderNtfs finderNtfs(&contextNtfs);
     FinderBasic finderBasic(&contextBasic);
     CExtensionDataBatch extensionBatch;
+    CFileTopControl::PendingBatch topBatch;
+    topBatch.reserve(256);
     const bool filterActive = CFiltering::IsFilterActive();
-    const struct ExtensionBatchFlusher
+    const struct ScanBatchFlusher
     {
-        CExtensionDataBatch& batch;
-        ~ExtensionBatchFlusher() { CWinDirStatModel::Get()->MergeExtensionData(batch); }
-    } extensionBatchFlusher{ extensionBatch };
+        CExtensionDataBatch& extensionBatch;
+        CFileTopControl::PendingBatch& topBatch;
+        ~ScanBatchFlusher()
+        {
+            CWinDirStatModel::Get()->MergeExtensionData(extensionBatch);
+            CFileTopControl::Get()->FlushTopBatch(topBatch);
+        }
+    } scanBatchFlusher{ extensionBatch, topBatch };
 
     for (auto itemOpt = queue->Pop(); itemOpt.has_value(); itemOpt = queue->Pop())
     {
@@ -1095,7 +1102,7 @@ void CItem::ScanItems(BlockingQueue<CItem*> * queue, FinderNtfsContext& contextN
                     item->UpwardAddFiles(1);
                     CItem* newitem = item->AddFile(*finder, &extensionBatch);
                     CFileDupeControl::Get()->ProcessDuplicate(newitem, queue);
-                    CFileTopControl::Get()->ProcessTop(newitem);
+                    CFileTopControl::Get()->ProcessTop(newitem, &topBatch);
                     queue->WaitIfSuspended();
                 }
 

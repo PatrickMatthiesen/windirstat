@@ -29,12 +29,26 @@ bool CFileTopControl::GetAscendingDefault(const int column)
     return column == COL_ITEMTOP_NAME || column == COL_ITEMTOP_LAST_CHANGE;
 }
 
-void CFileTopControl::ProcessTop(CItem * item)
+void CFileTopControl::ProcessTop(CItem* item, PendingBatch* batch)
 {
     // Do not process if we are not tracking large files
     if (COptions::LargeFileCount == 0) return;
 
-    m_queuedSet.push(item);
+    if (batch == nullptr)
+    {
+        m_queuedSet.push(PendingBatch{ item });
+        return;
+    }
+
+    batch->push_back(item);
+    if (batch->size() >= PendingBatchSize) FlushTopBatch(*batch);
+}
+
+void CFileTopControl::FlushTopBatch(PendingBatch& batch)
+{
+    if (batch.empty()) return;
+    if (COptions::LargeFileCount != 0) m_queuedSet.push(batch);
+    batch.clear();
 }
 
 void CFileTopControl::ClearPendingItems()
@@ -58,15 +72,18 @@ void CFileTopControl::SortItems()
     }
 
     // Process queued items - only mark for resort if item could affect top N
-    CItem* newItem = nullptr;
-    while (m_queuedSet.pop(newItem))
+    PendingBatch newItems;
+    while (m_queuedSet.pop(newItems))
     {
-        // Check if this item could affect the top N
-        if (m_sizeMap.size() < topN || newItem->GetSizeLogical() > m_topNMinSize)
+        for (const auto newItem : newItems)
         {
-            m_needsResort = true;
+            // Check if this item could affect the top N
+            if (m_sizeMap.size() < topN || newItem->GetSizeLogical() > m_topNMinSize)
+            {
+                m_needsResort = true;
+            }
+            m_sizeMap.push_back(newItem);
         }
-        m_sizeMap.push_back(newItem);
     }
 
     // Only sort the vector if we need to update the top N
@@ -117,10 +134,10 @@ void CFileTopControl::RemoveItem(CItem* item)
 {
     // Fold pending scan results into the tracked list before calculating
     // removals so queued descendants do not get re-added by SortItems().
-    CItem* newItem = nullptr;
-    while (m_queuedSet.pop(newItem))
+    PendingBatch newItems;
+    while (m_queuedSet.pop(newItems))
     {
-        m_sizeMap.push_back(newItem);
+        m_sizeMap.insert(m_sizeMap.end(), newItems.begin(), newItems.end());
     }
 
     // Create list of all items to remove
